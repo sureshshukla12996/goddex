@@ -170,7 +170,7 @@ class TokenMonitor:
             
             # Additional wait for dynamic content
             # डायनामिक कंटेंट के लिए अतिरिक्त इंतज़ार / Additional wait for dynamic content
-            time.sleep(3)
+            time.sleep(config.DYNAMIC_CONTENT_WAIT)
             
             # Find all NEW token rows
             # सभी नए टोकन रो खोजें / Find all NEW token rows
@@ -354,8 +354,8 @@ class TokenMonitor:
         # Truncate long contract addresses
         # लंबे कॉन्ट्रैक्ट एड्रेस को छोटा करें / Truncate long contract addresses
         contract = token_info.get('contract', 'N/A')
-        if len(contract) > 20:
-            contract = contract[:20] + "..."
+        if len(contract) > config.CONTRACT_ADDRESS_DISPLAY_LENGTH:
+            contract = contract[:config.CONTRACT_ADDRESS_DISPLAY_LENGTH] + "..."
         contract = html.escape(contract)
         
         message = f"""
@@ -390,11 +390,13 @@ class TokenMonitor:
                 else:
                     self.logger.warning(f"कोई टोकन नहीं मिला, प्रयास {attempt + 1}/{max_retries} / No tokens found, attempt {attempt + 1}/{max_retries}")
                     if attempt < max_retries - 1:
-                        time.sleep(5)
+                        time.sleep(config.RETRY_DELAY)
             except Exception as e:
                 self.logger.error(f"स्क्रैपिंग प्रयास {attempt + 1} विफल / Scraping attempt {attempt + 1} failed: {e}")
                 if attempt < max_retries - 1:
-                    time.sleep(10)
+                    # Exponential backoff: RETRY_DELAY * 2 for subsequent attempts
+                    delay = config.RETRY_DELAY * (2 ** attempt)
+                    time.sleep(delay)
                 else:
                     raise
         return []
