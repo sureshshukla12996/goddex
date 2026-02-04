@@ -1,0 +1,17 @@
+[Unit]
+Description=DexScreener Token Monitor Bot
+After=network.target
+
+[Service]
+Type=simple
+User=youruser
+WorkingDirectory=/path/to/goddex
+Environment="PATH=/path/to/goddex/venv/bin"
+ExecStart=/path/to/goddex/venv/bin/python3 /path/to/goddex/token_scraper.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/path/to/goddex/logs/service.log
+StandardError=append:/path/to/goddex/logs/service_error.log
+
+[Install]
+WantedBy=multi-user.target
