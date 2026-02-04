@@ -41,10 +41,11 @@
 
 ## 🌟 Overview
 
-DexScreener Token Monitor is an automated bot that continuously monitors [DexScreener](https://dexscreener.com/) for new token listings and sends instant notifications to your Telegram group. The bot uses Selenium WebDriver to scrape the website and detects tokens with the `ds-dex-table-row-new` class.
+DexScreener Token Monitor is an automated bot that continuously monitors [DexScreener's new-pairs page](https://dexscreener.com/new-pairs?rankBy=pairAge&order=asc) for new token listings and sends instant notifications to your Telegram group. The bot uses Selenium WebDriver to scrape the website and detects tokens with the `ds-dex-table-row-new` class, specifically targeting the newest pairs sorted by age.
 
 ### Key Highlights
-- ⚡ Real-time monitoring
+- ⚡ Real-time monitoring of newest token pairs
+- 🎯 Targets DexScreener's new-pairs page sorted by pair age
 - 🤖 Automated Telegram notifications
 - 💾 Persistent storage to avoid duplicates
 - 🔄 Auto-restart on failure
@@ -53,28 +54,33 @@ DexScreener Token Monitor is an automated bot that continuously monitors [DexScr
 
 ## ✨ Features
 
-- **Real-time Monitoring**: Continuously scans DexScreener for new tokens
-- **Smart Detection**: Identifies new tokens using CSS class `ds-dex-table-row-new`
+- **Real-time Monitoring**: Continuously scans DexScreener's new-pairs page for the newest tokens
+- **Smart Detection**: Identifies new tokens using CSS class `ds-dex-table-row-new` on the new-pairs page sorted by pair age
 - **Comprehensive Data Extraction**:
-  - Token name/symbol
+  - Token symbol
   - Blockchain/chain
   - Current price
-  - Pair age
+  - Pair age (most recent first)
   - DexScreener link
   - Contract address
+  - Liquidity (if available)
+  - Volume (if available)
 - **Telegram Integration**: 
   - Formatted HTML messages with emojis
+  - HTML-escaped content for safety
   - Instant notifications
   - Rate limiting to avoid API limits
-- **Duplicate Prevention**: Maintains a record of sent tokens
+- **Duplicate Prevention**: Maintains a record of sent tokens using unique identifiers
 - **Error Handling**: 
-  - Automatic retry logic
+  - Automatic retry logic with configurable attempts
   - WebDriver recovery
   - Comprehensive error logging
+  - Graceful handling of missing data fields
 - **Server Ready**:
   - Headless Chrome support
   - Systemd service integration
   - Auto-start on boot
+- **Optimized for New Pairs**: Monitors the `/new-pairs` endpoint sorted by age (oldest first) to catch the freshest tokens
 
 ## 📋 Prerequisites
 
@@ -182,8 +188,10 @@ nano .env
 ```env
 TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz123456789
 TELEGRAM_CHAT_ID=-1001234567890
-DEXSCREENER_URL=https://dexscreener.com/
+DEXSCREENER_URL=https://dexscreener.com/new-pairs?rankBy=pairAge&order=asc
 CHECK_INTERVAL=10
+MAX_RETRIES=3
+PAGE_LOAD_TIMEOUT=15
 ```
 
 ## ⚙️ Configuration
@@ -194,8 +202,10 @@ All configuration is done through the `.env` file:
 |----------|-------------|---------|
 | `TELEGRAM_BOT_TOKEN` | Your Telegram bot token from BotFather | Required |
 | `TELEGRAM_CHAT_ID` | Your Telegram chat/group ID | Required |
-| `DEXSCREENER_URL` | DexScreener website URL | `https://dexscreener.com/` |
+| `DEXSCREENER_URL` | DexScreener new-pairs page URL | `https://dexscreener.com/new-pairs?rankBy=pairAge&order=asc` |
 | `CHECK_INTERVAL` | Seconds between each check | `10` |
+| `MAX_RETRIES` | Maximum retry attempts on failure | `3` |
+| `PAGE_LOAD_TIMEOUT` | Page load timeout in seconds | `15` |
 
 Advanced configuration can be done in `config.py` for Selenium options, logging, etc.
 
@@ -394,10 +404,11 @@ This bot is for educational purposes only. Use responsibly and in accordance wit
 
 ## 🌟 अवलोकन
 
-DexScreener Token Monitor एक स्वचालित बॉट है जो [DexScreener](https://dexscreener.com/) पर नए टोकन लिस्टिंग की निरंतर निगरानी करता है और आपके टेलीग्राम ग्रुप में तुरंत सूचना भेजता है। यह बॉट Selenium WebDriver का उपयोग करके वेबसाइट को स्क्रैप करता है और `ds-dex-table-row-new` क्लास वाले टोकन का पता लगाता है।
+DexScreener Token Monitor एक स्वचालित बॉट है जो [DexScreener के new-pairs पेज](https://dexscreener.com/new-pairs?rankBy=pairAge&order=asc) पर नए टोकन लिस्टिंग की निरंतर निगरानी करता है और आपके टेलीग्राम ग्रुप में तुरंत सूचना भेजता है। यह बॉट Selenium WebDriver का उपयोग करके वेबसाइट को स्क्रैप करता है और `ds-dex-table-row-new` क्लास वाले टोकन का पता लगाता है, विशेष रूप से आयु के अनुसार क्रमबद्ध नवीनतम पेयर को लक्षित करता है।
 
 ### मुख्य विशेषताएं
-- ⚡ रियल-टाइम मॉनिटरिंग
+- ⚡ नवीनतम टोकन पेयर की रियल-टाइम मॉनिटरिंग
+- 🎯 DexScreener के new-pairs पेज को पेयर आयु के अनुसार क्रमबद्ध करके लक्षित करता है
 - 🤖 स्वचालित टेलीग्राम सूचनाएं
 - 💾 डुप्लीकेट से बचने के लिए डेटा स्टोरेज
 - 🔄 विफलता पर ऑटो-रीस्टार्ट
@@ -535,8 +546,10 @@ nano .env
 ```env
 TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz123456789
 TELEGRAM_CHAT_ID=-1001234567890
-DEXSCREENER_URL=https://dexscreener.com/
+DEXSCREENER_URL=https://dexscreener.com/new-pairs?rankBy=pairAge&order=asc
 CHECK_INTERVAL=10
+MAX_RETRIES=3
+PAGE_LOAD_TIMEOUT=15
 ```
 
 ## ⚙️ कॉन्फ़िगरेशन
@@ -547,8 +560,10 @@ CHECK_INTERVAL=10
 |----------|--------|---------|
 | `TELEGRAM_BOT_TOKEN` | BotFather से आपका Telegram बॉट टोकन | आवश्यक |
 | `TELEGRAM_CHAT_ID` | आपकी Telegram चैट/ग्रुप ID | आवश्यक |
-| `DEXSCREENER_URL` | DexScreener वेबसाइट URL | `https://dexscreener.com/` |
+| `DEXSCREENER_URL` | DexScreener new-pairs पेज URL | `https://dexscreener.com/new-pairs?rankBy=pairAge&order=asc` |
 | `CHECK_INTERVAL` | प्रत्येक चेक के बीच सेकंड | `10` |
+| `MAX_RETRIES` | विफलता पर अधिकतम पुनः प्रयास | `3` |
+| `PAGE_LOAD_TIMEOUT` | पेज लोड टाइमआउट सेकंड में | `15` |
 
 उन्नत कॉन्फ़िगरेशन Selenium options, logging आदि के लिए `config.py` में किया जा सकता है।
 
