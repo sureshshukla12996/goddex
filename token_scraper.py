@@ -162,7 +162,7 @@ class TokenMonitor:
             # Wait for at least one row
             # कम से कम एक रो का इंतज़ार करें / Wait for at least one row
             try:
-                WebDriverWait(driver, 10).until(
+                WebDriverWait(driver, config.PAGE_LOAD_TIMEOUT).until(
                     EC.presence_of_element_located((By.CLASS_NAME, "ds-dex-table-row"))
                 )
             except TimeoutException:
@@ -190,12 +190,12 @@ class TokenMonitor:
                     try:
                         symbol_elem = row.find_element(By.CLASS_NAME, "ds-dex-table-row-base-token-symbol")
                         token_data['symbol'] = symbol_elem.text.strip()
-                    except:
+                    except Exception:
                         try:
                             # Fallback to token name
                             name_elem = row.find_element(By.CLASS_NAME, "ds-dex-table-row-base-token-name-text")
                             token_data['symbol'] = name_elem.text.strip()
-                        except:
+                        except Exception:
                             token_data['symbol'] = "Unknown"
                     
                     # Chain/Network (Required)
@@ -203,7 +203,7 @@ class TokenMonitor:
                     try:
                         chain_elem = row.find_element(By.CLASS_NAME, "ds-dex-table-row-chain-icon")
                         token_data['chain'] = chain_elem.get_attribute("title") or "Unknown"
-                    except:
+                    except Exception:
                         token_data['chain'] = "Unknown"
                     
                     # Price (Optional)
@@ -211,7 +211,7 @@ class TokenMonitor:
                     try:
                         price_elem = row.find_element(By.CSS_SELECTOR, "div.ds-dex-table-row-col-price")
                         token_data['price'] = price_elem.text.strip() or "N/A"
-                    except:
+                    except Exception:
                         token_data['price'] = "N/A"
                     
                     # Pair Age (Important for new pairs)
@@ -219,7 +219,7 @@ class TokenMonitor:
                     try:
                         age_elem = row.find_element(By.CSS_SELECTOR, "div.ds-dex-table-row-col-pair-age")
                         token_data['pair_age'] = age_elem.text.strip() or "N/A"
-                    except:
+                    except Exception:
                         token_data['pair_age'] = "N/A"
                     
                     # Liquidity (Optional)
@@ -227,7 +227,7 @@ class TokenMonitor:
                     try:
                         liquidity_elem = row.find_element(By.CSS_SELECTOR, "div.ds-dex-table-row-col-liquidity")
                         token_data['liquidity'] = liquidity_elem.text.strip() or "N/A"
-                    except:
+                    except Exception:
                         token_data['liquidity'] = "N/A"
                     
                     # Volume (Optional)
@@ -235,7 +235,7 @@ class TokenMonitor:
                     try:
                         volume_elem = row.find_element(By.CSS_SELECTOR, "div.ds-dex-table-row-col-volume")
                         token_data['volume'] = volume_elem.text.strip() or "N/A"
-                    except:
+                    except Exception:
                         token_data['volume'] = "N/A"
                     
                     # Token Link (Required)
@@ -288,7 +288,7 @@ class TokenMonitor:
             try:
                 name_elem = row_element.find_element(By.CSS_SELECTOR, '.ds-dex-table-row-col-token')
                 token_name = name_elem.text.strip()
-            except:
+            except Exception:
                 pass
             
             # ब्लॉकचेन/चेन / Blockchain/chain
@@ -296,7 +296,7 @@ class TokenMonitor:
             try:
                 chain_elem = row_element.find_element(By.CSS_SELECTOR, '.ds-dex-table-row-badge')
                 chain = chain_elem.text.strip()
-            except:
+            except Exception:
                 pass
             
             # प्राइस / Price
@@ -304,7 +304,7 @@ class TokenMonitor:
             try:
                 price_elem = row_element.find_element(By.CSS_SELECTOR, '.ds-dex-table-row-col-price')
                 price = price_elem.text.strip()
-            except:
+            except Exception:
                 pass
             
             # पेयर एज / Pair age
@@ -312,7 +312,7 @@ class TokenMonitor:
             try:
                 age_elem = row_element.find_element(By.CSS_SELECTOR, '.ds-dex-table-row-age')
                 age = age_elem.text.strip()
-            except:
+            except Exception:
                 pass
             
             # कॉन्ट्रैक्ट एड्रेस (यदि उपलब्ध हो) / Contract address (if available)
@@ -323,7 +323,7 @@ class TokenMonitor:
                     parts = token_url.split('/')
                     if len(parts) > 0:
                         contract = parts[-1]
-            except:
+            except Exception:
                 pass
             
             return {
@@ -368,7 +368,7 @@ class TokenMonitor:
 ⏱️ <b>Age / एज:</b> {pair_age}
 📝 <b>Contract / कॉन्ट्रैक्ट:</b> <code>{contract}</code>
 
-🔗 <a href="{token_info.get('link', '#')}">View on DexScreener / DexScreener पर देखें</a>
+🔗 <a href="{html.escape(token_info.get('link', '#'))}">View on DexScreener / DexScreener पर देखें</a>
 
 ⏰ <b>Time / समय:</b> {token_info.get('timestamp', 'N/A')}
 """
@@ -394,8 +394,10 @@ class TokenMonitor:
             except Exception as e:
                 self.logger.error(f"स्क्रैपिंग प्रयास {attempt + 1} विफल / Scraping attempt {attempt + 1} failed: {e}")
                 if attempt < max_retries - 1:
-                    # Exponential backoff: RETRY_DELAY * 2 for subsequent attempts
+                    # Exponential backoff: RETRY_DELAY, then 2x, then 4x
+                    # पहले प्रयास के बाद प्रतीक्षा: RETRY_DELAY, फिर 2x, फिर 4x
                     delay = config.RETRY_DELAY * (2 ** attempt)
+                    self.logger.info(f"पुनः प्रयास से पहले {delay} सेकंड प्रतीक्षा / Waiting {delay} seconds before retry")
                     time.sleep(delay)
                 else:
                     raise
