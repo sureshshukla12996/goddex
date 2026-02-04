@@ -10,6 +10,7 @@ import logging
 import os
 import sys
 import time
+import html
 from datetime import datetime
 from pathlib import Path
 
@@ -143,6 +144,135 @@ class TokenMonitor:
             self.logger.error(f"टेलीग्राम संदेश भेजने में त्रुटि / Error sending Telegram message: {e}")
             return False
     
+    def extract_new_tokens(self, driver):
+        """
+        Extract new token listings from DexScreener new-pairs page
+        Based on Elements.txt structure analysis
+        नए टोकन निकालें / Extract new tokens
+        """
+        tokens = []
+        
+        try:
+            # Wait for the table to load (JavaScript rendered)
+            # टेबल लोड होने का इंतज़ार करें / Wait for table to load
+            WebDriverWait(driver, config.PAGE_LOAD_TIMEOUT).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "ds-dex-table"))
+            )
+            
+            # Wait for at least one row
+            # कम से कम एक रो का इंतज़ार करें / Wait for at least one row
+            try:
+                WebDriverWait(driver, config.PAGE_LOAD_TIMEOUT).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "ds-dex-table-row"))
+                )
+            except TimeoutException:
+                self.logger.warning("टेबल रो नहीं मिली / No table rows found")
+            
+            # Additional wait for dynamic content
+            # डायनामिक कंटेंट के लिए अतिरिक्त इंतज़ार / Additional wait for dynamic content
+            time.sleep(config.DYNAMIC_CONTENT_WAIT)
+            
+            # Find all NEW token rows
+            # सभी नए टोकन रो खोजें / Find all NEW token rows
+            new_rows = driver.find_elements(
+                By.CSS_SELECTOR, 
+                "a.ds-dex-table-row.ds-dex-table-row-new"
+            )
+            
+            self.logger.info(f"मिले नए टोकन रो: {len(new_rows)} / Found {len(new_rows)} new token rows")
+            
+            for row in new_rows:
+                try:
+                    token_data = {}
+                    
+                    # Token Symbol (Required)
+                    # टोकन सिंबल (आवश्यक) / Token Symbol (Required)
+                    try:
+                        symbol_elem = row.find_element(By.CLASS_NAME, "ds-dex-table-row-base-token-symbol")
+                        token_data['symbol'] = symbol_elem.text.strip()
+                    except Exception:
+                        try:
+                            # Fallback to token name
+                            name_elem = row.find_element(By.CLASS_NAME, "ds-dex-table-row-base-token-name-text")
+                            token_data['symbol'] = name_elem.text.strip()
+                        except Exception:
+                            token_data['symbol'] = "Unknown"
+                    
+                    # Chain/Network (Required)
+                    # चेन/नेटवर्क (आवश्यक) / Chain/Network (Required)
+                    try:
+                        chain_elem = row.find_element(By.CLASS_NAME, "ds-dex-table-row-chain-icon")
+                        token_data['chain'] = chain_elem.get_attribute("title") or "Unknown"
+                    except Exception:
+                        token_data['chain'] = "Unknown"
+                    
+                    # Price (Optional)
+                    # प्राइस (वैकल्पिक) / Price (Optional)
+                    try:
+                        price_elem = row.find_element(By.CSS_SELECTOR, "div.ds-dex-table-row-col-price")
+                        token_data['price'] = price_elem.text.strip() or "N/A"
+                    except Exception:
+                        token_data['price'] = "N/A"
+                    
+                    # Pair Age (Important for new pairs)
+                    # पेयर एज (नए पेयर के लिए महत्वपूर्ण) / Pair Age (Important for new pairs)
+                    try:
+                        age_elem = row.find_element(By.CSS_SELECTOR, "div.ds-dex-table-row-col-pair-age")
+                        token_data['pair_age'] = age_elem.text.strip() or "N/A"
+                    except Exception:
+                        token_data['pair_age'] = "N/A"
+                    
+                    # Liquidity (Optional)
+                    # लिक्विडिटी (वैकल्पिक) / Liquidity (Optional)
+                    try:
+                        liquidity_elem = row.find_element(By.CSS_SELECTOR, "div.ds-dex-table-row-col-liquidity")
+                        token_data['liquidity'] = liquidity_elem.text.strip() or "N/A"
+                    except Exception:
+                        token_data['liquidity'] = "N/A"
+                    
+                    # Volume (Optional)
+                    # वॉल्यूम (वैकल्पिक) / Volume (Optional)
+                    try:
+                        volume_elem = row.find_element(By.CSS_SELECTOR, "div.ds-dex-table-row-col-volume")
+                        token_data['volume'] = volume_elem.text.strip() or "N/A"
+                    except Exception:
+                        token_data['volume'] = "N/A"
+                    
+                    # Token Link (Required)
+                    # टोकन लिंक (आवश्यक) / Token Link (Required)
+                    token_data['link'] = row.get_attribute("href") or ""
+                    
+                    # Contract Address (from URL)
+                    # कॉन्ट्रैक्ट एड्रेस (URL से) / Contract Address (from URL)
+                    if token_data['link']:
+                        parts = token_data['link'].split('/')
+                        token_data['contract'] = parts[-1] if len(parts) > 0 else "N/A"
+                    else:
+                        token_data['contract'] = "N/A"
+                    
+                    # Create unique identifier
+                    # यूनिक आइडेंटिफायर बनाएं / Create unique identifier
+                    token_id = f"{token_data['symbol']}_{token_data['chain']}_{token_data['contract']}"
+                    token_data['id'] = token_id
+                    
+                    # Add timestamp
+                    token_data['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    
+                    tokens.append(token_data)
+                    
+                except Exception as e:
+                    self.logger.error(f"व्यक्तिगत टोकन निकालने में त्रुटि / Error extracting individual token: {e}")
+                    continue
+            
+            return tokens
+            
+        except TimeoutException:
+            self.logger.error("DexScreener टेबल लोड होने में टाइमआउट / Timeout waiting for DexScreener table to load")
+            return []
+        except Exception as e:
+            self.logger.error(f"extract_new_tokens में त्रुटि / Error in extract_new_tokens: {e}")
+            return []
+    
     def extract_token_info(self, row_element):
         """टोकन जानकारी निकालें / Extract token information"""
         try:
@@ -158,7 +288,7 @@ class TokenMonitor:
             try:
                 name_elem = row_element.find_element(By.CSS_SELECTOR, '.ds-dex-table-row-col-token')
                 token_name = name_elem.text.strip()
-            except:
+            except Exception:
                 pass
             
             # ब्लॉकचेन/चेन / Blockchain/chain
@@ -166,7 +296,7 @@ class TokenMonitor:
             try:
                 chain_elem = row_element.find_element(By.CSS_SELECTOR, '.ds-dex-table-row-badge')
                 chain = chain_elem.text.strip()
-            except:
+            except Exception:
                 pass
             
             # प्राइस / Price
@@ -174,7 +304,7 @@ class TokenMonitor:
             try:
                 price_elem = row_element.find_element(By.CSS_SELECTOR, '.ds-dex-table-row-col-price')
                 price = price_elem.text.strip()
-            except:
+            except Exception:
                 pass
             
             # पेयर एज / Pair age
@@ -182,7 +312,7 @@ class TokenMonitor:
             try:
                 age_elem = row_element.find_element(By.CSS_SELECTOR, '.ds-dex-table-row-age')
                 age = age_elem.text.strip()
-            except:
+            except Exception:
                 pass
             
             # कॉन्ट्रैक्ट एड्रेस (यदि उपलब्ध हो) / Contract address (if available)
@@ -193,7 +323,7 @@ class TokenMonitor:
                     parts = token_url.split('/')
                     if len(parts) > 0:
                         contract = parts[-1]
-            except:
+            except Exception:
                 pass
             
             return {
@@ -210,21 +340,72 @@ class TokenMonitor:
             return None
     
     def format_message(self, token_info):
-        """टेलीग्राम संदेश फॉर्मेट करें / Format Telegram message"""
+        """
+        Format token data for Telegram with proper HTML formatting
+        टेलीग्राम संदेश फॉर्मेट करें / Format Telegram message
+        """
+        # Escape HTML special characters in text fields
+        # HTML विशेष वर्णों को एस्केप करें / Escape HTML special characters
+        symbol = html.escape(token_info.get('symbol', 'Unknown'))
+        chain = html.escape(token_info.get('chain', 'Unknown'))
+        price = html.escape(token_info.get('price', 'N/A'))
+        pair_age = html.escape(token_info.get('pair_age', 'N/A'))
+        
+        # Truncate contract address first, then escape
+        # पहले कॉन्ट्रैक्ट एड्रेस को छोटा करें, फिर एस्केप करें / Truncate first, then escape
+        contract = token_info.get('contract', 'N/A')
+        if len(contract) > config.CONTRACT_ADDRESS_DISPLAY_LENGTH:
+            contract = contract[:config.CONTRACT_ADDRESS_DISPLAY_LENGTH] + "..."
+        contract = html.escape(contract)
+        
+        # Get URL - URLs in href don't need HTML escaping as long as they're valid
+        # URL प्राप्त करें - href में URL को HTML एस्केप की आवश्यकता नहीं
+        link = token_info.get('link', '#')
+        
         message = f"""
-🚀 <b>नया टोकन मिला! / New Token Found!</b> 🚀
+🚀 <b>NEW TOKEN DETECTED!</b>
+<b>नया टोकन मिला!</b>
 
-💎 <b>टोकन / Token:</b> {token_info['name']}
-⛓️ <b>ब्लॉकचेन / Chain:</b> {token_info['chain']}
-💰 <b>प्राइस / Price:</b> {token_info['price']}
-⏰ <b>एज / Age:</b> {token_info['age']}
-📝 <b>कॉन्ट्रैक्ट / Contract:</b> <code>{token_info['contract']}</code>
+💎 <b>Token / टोकन:</b> {symbol}
+⛓️ <b>Chain / चेन:</b> {chain}
+💰 <b>Price / प्राइस:</b> {price}
+⏱️ <b>Age / एज:</b> {pair_age}
+📝 <b>Contract / कॉन्ट्रैक्ट:</b> <code>{contract}</code>
 
-🔗 <b>लिंक / Link:</b> {token_info['url']}
+🔗 <a href="{link}">View on DexScreener / DexScreener पर देखें</a>
 
-⏱️ <b>समय / Time:</b> {token_info['timestamp']}
+⏰ <b>Time / समय:</b> {token_info.get('timestamp', 'N/A')}
 """
         return message.strip()
+    
+    def scrape_with_retry(self, max_retries=None):
+        """
+        Attempt to scrape with retries on failure
+        पुनः प्रयास के साथ स्क्रैप करने का प्रयास / Attempt to scrape with retries
+        """
+        if max_retries is None:
+            max_retries = config.MAX_RETRIES
+            
+        for attempt in range(max_retries):
+            try:
+                tokens = self.extract_new_tokens(self.driver)
+                if tokens:
+                    return tokens
+                else:
+                    self.logger.warning(f"कोई टोकन नहीं मिला, प्रयास {attempt + 1}/{max_retries} / No tokens found, attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        time.sleep(config.RETRY_DELAY)
+            except Exception as e:
+                self.logger.error(f"स्क्रैपिंग प्रयास {attempt + 1} विफल / Scraping attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    # Exponential backoff: First retry 5s, second 10s, third 20s
+                    # पहला पुनः प्रयास 5s, दूसरा 10s, तीसरा 20s
+                    delay = config.RETRY_DELAY * (2 ** attempt)
+                    self.logger.info(f"पुनः प्रयास से पहले {delay} सेकंड प्रतीक्षा / Waiting {delay} seconds before retry")
+                    time.sleep(delay)
+                else:
+                    raise
+        return []
     
     def scan_for_new_tokens(self):
         """नए टोकन के लिए स्कैन करें / Scan for new tokens"""
@@ -233,30 +414,25 @@ class TokenMonitor:
             self.driver.get(config.DEXSCREENER_URL)
             
             # पेज लोड होने का इंतज़ार करें / Wait for page to load
-            WebDriverWait(self.driver, 10).until(
+            WebDriverWait(self.driver, config.PAGE_LOAD_TIMEOUT).until(
                 EC.presence_of_element_located((By.TAG_NAME, 'body'))
             )
             
-            # थोड़ा और इंतज़ार करें / Wait a bit more
-            time.sleep(3)
-            
-            # नए टोकन खोजें / Find new tokens
-            new_rows = self.driver.find_elements(By.CLASS_NAME, 'ds-dex-table-row-new')
-            
-            self.logger.info(f"मिले नए टोकन: {len(new_rows)} / Found new tokens: {len(new_rows)}")
+            # Extract tokens using the new method
+            # नई विधि का उपयोग करके टोकन निकालें / Extract tokens using new method
+            tokens = self.extract_new_tokens(self.driver)
             
             new_tokens_found = []
             
-            for row in new_rows:
+            for token_info in tokens:
                 try:
-                    token_info = self.extract_token_info(row)
-                    if token_info and token_info['url']:
+                    if token_info and token_info.get('link'):
                         # चेक करें कि पहले से नहीं भेजा गया / Check if not already sent
-                        token_id = token_info['url']
+                        token_id = token_info['id']
                         if token_id not in self.sent_tokens:
                             new_tokens_found.append(token_info)
                             self.sent_tokens.add(token_id)
-                            self.logger.info(f"नया टोकन: {token_info['name']} / New token: {token_info['name']}")
+                            self.logger.info(f"नया टोकन: {token_info.get('symbol', 'Unknown')} / New token: {token_info.get('symbol', 'Unknown')}")
                 except Exception as e:
                     self.logger.error(f"टोकन प्रोसेस करने में त्रुटि / Error processing token: {e}")
                     continue
