@@ -13,7 +13,6 @@ import time
 import html
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import quote
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -352,11 +351,12 @@ class TokenMonitor:
         price = html.escape(token_info.get('price', 'N/A'))
         pair_age = html.escape(token_info.get('pair_age', 'N/A'))
         
-        # Truncate and escape contract address
-        # कॉन्ट्रैक्ट एड्रेस को छोटा और एस्केप करें / Truncate and escape contract address
-        contract = html.escape(token_info.get('contract', 'N/A'))
+        # Truncate contract address first, then escape
+        # पहले कॉन्ट्रैक्ट एड्रेस को छोटा करें, फिर एस्केप करें / Truncate first, then escape
+        contract = token_info.get('contract', 'N/A')
         if len(contract) > config.CONTRACT_ADDRESS_DISPLAY_LENGTH:
             contract = contract[:config.CONTRACT_ADDRESS_DISPLAY_LENGTH] + "..."
+        contract = html.escape(contract)
         
         # Get URL - URLs in href don't need HTML escaping as long as they're valid
         # URL प्राप्त करें - href में URL को HTML एस्केप की आवश्यकता नहीं
